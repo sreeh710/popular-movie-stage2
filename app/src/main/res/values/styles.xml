@@ -1,7 +1,11 @@
 <resources>
 
-    <!-- Base application theme. -->
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+    <style name="MovieTheme" parent="Base.MovieTheme"></style>
+
+    <!-- Details activity style -->
+    <style name="Details.MovieTheme" parent="MovieTheme"></style>
+
+    <style name="Base.MovieTheme" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryDark">@color/primary_dark</item>
         <item name="colorAccent">@color/accent</item>

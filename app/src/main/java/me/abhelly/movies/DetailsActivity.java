@@ -1,7 +1,6 @@
 package me.abhelly.movies;
 
 import android.os.Bundle;
-import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.view.MenuItem;
 
@@ -20,19 +19,16 @@ public class DetailsActivity extends AppCompatActivity {
         setContentView(R.layout.activity_details);
 
         MovieResponse.Movie movie;
+        boolean isFavorite;
         Bundle extras = getIntent().getExtras();
         if (extras != null) {
-            movie = extras.getParcelable(DetailsFragment.ARG_MOVIE);
+            movie = extras.getParcelable(DetailsFragment.MOVIE);
+            isFavorite = extras.getBoolean(DetailsFragment.FAVORITE);
         } else {
             throw new NullPointerException("No movie found in intent extras");
         }
-        ActionBar actionBar = getSupportActionBar();
-        if (actionBar != null) {
-            actionBar.setDisplayHomeAsUpEnabled(true);
-            actionBar.setTitle(movie.title);
-        }
 
-        DetailsFragment fragment = DetailsFragment.getInstance(movie);
+        DetailsFragment fragment = DetailsFragment.getInstance(movie, isFavorite);
         getSupportFragmentManager()
                 .beginTransaction()
                 .replace(R.id.container, fragment)

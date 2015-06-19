@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MoviesFragment">
+    tools:context=".MainActivity">
 
     <ProgressBar
         android:id="@+id/progress_bar"
@@ -36,9 +36,9 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:clipToPadding="false"
-        android:paddingBottom="@dimen/grid_vertical_margin"
-        android:paddingLeft="@dimen/grid_horizontal_margin"
-        android:paddingRight="@dimen/grid_horizontal_margin"
-        android:paddingTop="@dimen/grid_vertical_margin"
+        android:paddingBottom="@dimen/margin_small"
+        android:paddingLeft="@dimen/margin_tiny"
+        android:paddingRight="@dimen/margin_tiny"
+        android:paddingTop="@dimen/margin_small"
         android:visibility="gone" />
 </RelativeLayout>

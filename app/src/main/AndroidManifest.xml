@@ -9,7 +9,7 @@
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:theme="@style/AppTheme">
+        android:theme="@style/MovieTheme">
         <activity
             android:name=".MainActivity"
             android:label="@string/app_name">
@@ -19,13 +19,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity
-            android:name=".SettingsActivity"
-            android:label="@string/label_settings" />
 
         <activity
             android:name=".DetailsActivity"
-            android:label="@string/label_details" />
-    </application>
+            android:label="@string/label_details"
+            android:theme="@style/Details.MovieTheme" />
 
+    </application>
 </manifest>

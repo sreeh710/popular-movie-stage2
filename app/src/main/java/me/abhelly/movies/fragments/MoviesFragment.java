@@ -22,7 +22,10 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import java.util.ArrayList;
+import java.util.StringTokenizer;
 
+import butterknife.ButterKnife;
+import butterknife.InjectView;
 import me.abhelly.movies.R;
 import me.abhelly.movies.api.MovieResponse;
 import me.abhelly.movies.api.MovieResponse.Movie;
@@ -51,13 +54,17 @@ public class MoviesFragment extends Fragment {
 
     private final static int VIEW_STATE_RESULTS = 2;
 
-    private TextView mErrorTextView;
+    @InjectView(R.id.error_text_view)
+    TextView mErrorTextView;
 
-    private Button mRetryButton;
+    @InjectView(R.id.retry_button)
+    Button mRetryButton;
 
-    private ProgressBar mProgressBar;
+    @InjectView(R.id.progress_bar)
+    ProgressBar mProgressBar;
 
-    private RecyclerView mRecyclerView;
+    @InjectView(R.id.recycler_view)
+    RecyclerView mRecyclerView;
 
     private MoviesAdapter mAdapter;
 
@@ -79,10 +86,7 @@ public class MoviesFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        boolean reloadData = (mSortOrder != null && !mSortOrder.equalsIgnoreCase(getSortParam()));
-        if (reloadData) {
-            loadData();
-        }
+        updateFavorites();
     }
 
     @Nullable
@@ -90,27 +94,26 @@ public class MoviesFragment extends Fragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
             Bundle savedInstanceState) {
         View v = inflater.inflate(R.layout.fragment_movie_list, container, false);
-        mErrorTextView = (TextView) v.findViewById(R.id.error_text_view);
-        mRetryButton = (Button) v.findViewById(R.id.retry_button);
+        ButterKnife.inject(this, v);
+
         mRetryButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                retry();
+                reload();
             }
         });
-        mProgressBar = (ProgressBar) v.findViewById(R.id.progress_bar);
-        mRecyclerView = (RecyclerView) v.findViewById(R.id.recycler_view);
         int orientation = getResources().getConfiguration().orientation;
         int spanCount = (orientation == Configuration.ORIENTATION_LANDSCAPE) ? 4 : 2;
         mRecyclerView.setLayoutManager(new GridLayoutManager(getActivity(), spanCount));
         mAdapter = new MoviesAdapter(getActivity(), mActionListener);
         mRecyclerView.setAdapter(mAdapter);
+        mSortOrder = getSortParam();
         if (savedInstanceState == null) {
-            loadData();
+            populateData();
         } else {
             mSortOrder = savedInstanceState.getString(ARG_SORT_ORDER);
-            if (!mSortOrder.equalsIgnoreCase(getSortParam())) {
-                loadData();
+            if (mSortOrder != null && !mSortOrder.equalsIgnoreCase(getSortParam())) {
+                populateData();
             }
             int state = savedInstanceState.getInt(ARG_VIEW_STATE, VIEW_STATE_ERROR);
             switch (state) {
@@ -120,6 +123,7 @@ public class MoviesFragment extends Fragment {
                 case VIEW_STATE_RESULTS:
                     ArrayList<Movie> items = savedInstanceState.getParcelableArrayList(ARG_ITEMS);
                     mAdapter.setItems(items);
+                    mRecyclerView.scrollToPosition(0);
                     showResultViews();
                     break;
                 default:
@@ -145,18 +149,60 @@ public class MoviesFragment extends Fragment {
     }
 
     /**
+     * Changes sort order, stores selected param to SharedPreferences, reloads fragment data.
+     *
+     * @param sortOrder sortBy param
+     */
+    public void setSortOrder(String sortOrder) {
+        mSortOrder = sortOrder;
+        populateData();
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putString(getString(R.string.prefs_sort_order), mSortOrder);
+        editor.apply();
+    }
+
+    /**
+     * Updates favorites list.
+     */
+    private void updateFavorites() {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
+        String favoritesString = prefs.getString(getString(R.string.prefs_favorites), "");
+        if (favoritesString.length() > 0) {
+            ArrayList<Long> list = new ArrayList<>();
+            StringTokenizer st = new StringTokenizer(favoritesString, ",");
+            while (st.hasMoreTokens()) {
+                list.add(Long.parseLong(st.nextToken()));
+            }
+            mAdapter.setFavorites(list);
+        }
+    }
+
+    /**
+     * Loads data from server or from db.
+     */
+    private void populateData() {
+        // load from db or from server
+        if (mSortOrder.equals(getString(R.string.sort_favorites))) {
+            // TODO: get from db
+        } else {
+            loadData();
+        }
+    }
+
+    /**
      * Loads movie list.
      */
     private void loadData() {
         showLoadingViews();
         RestAdapter adapter = RetrofitAdapter.getRestAdapter();
         TmdbService service = adapter.create(TmdbService.class);
-        mSortOrder = getSortParam();
         service.getMovieList(mSortOrder, new Callback<MovieResponse>() {
             @Override
             public void success(MovieResponse movieResponse, Response response) {
                 showResultViews();
                 mAdapter.setItems(movieResponse.results);
+                mRecyclerView.scrollToPosition(0);
             }
 
             @Override
@@ -167,9 +213,9 @@ public class MoviesFragment extends Fragment {
     }
 
     /**
-     * Retries to reload movie list.
+     * Retries to reload movie list from server.
      */
-    private void retry() {
+    private void reload() {
         loadData();
     }
 
@@ -215,20 +261,31 @@ public class MoviesFragment extends Fragment {
     }
 
     /**
+     * Movie list action listener
+     */
+    public interface ListActionListener {
+
+        void onMovieSelected(Movie movie, boolean isFavorite);
+    }
+
+    /**
      * Movies RecyclerView adapter class.
      */
     private static class MoviesAdapter extends RecyclerView.Adapter<MovieViewHolder> {
 
         final private Context mContext;
 
+        final private ListActionListener mActionListener;
+
         private ArrayList<Movie> mItems;
 
-        final private ListActionListener mActionListener;
+        private ArrayList<Long> mFavorites;
 
         public MoviesAdapter(Context context, ListActionListener listener) {
             mContext = context;
             mActionListener = listener;
             mItems = new ArrayList<>();
+            mFavorites = new ArrayList<>();
         }
 
         @Override
@@ -249,7 +306,9 @@ public class MoviesFragment extends Fragment {
             holder.mPosterView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
-                    mActionListener.onMovieSelected(mItems.get(position));
+                    Movie movie = mItems.get(position);
+                    boolean isFavorite = mFavorites.contains(movie.id);
+                    mActionListener.onMovieSelected(movie, isFavorite);
                 }
             });
         }
@@ -259,13 +318,17 @@ public class MoviesFragment extends Fragment {
             return mItems.size();
         }
 
-        public void setItems(ArrayList<Movie> items) {
-            mItems = items;
-            notifyDataSetChanged();
+        public void setFavorites(ArrayList<Long> favorites) {
+            mFavorites = favorites;
         }
 
         public ArrayList<Movie> getItems() {
             return mItems;
+        }
+
+        public void setItems(ArrayList<Movie> items) {
+            mItems = items;
+            notifyDataSetChanged();
         }
 
     }
@@ -273,21 +336,14 @@ public class MoviesFragment extends Fragment {
     /**
      * Movie view holder class.
      */
-    private static class MovieViewHolder extends RecyclerView.ViewHolder {
+    static class MovieViewHolder extends RecyclerView.ViewHolder {
 
-        final public ImageView mPosterView;
+        @InjectView(R.id.poster_image_view)
+        public ImageView mPosterView;
 
         public MovieViewHolder(View itemView) {
             super(itemView);
-            this.mPosterView = (ImageView) itemView.findViewById(R.id.poster_image_view);
+            ButterKnife.inject(this, itemView);
         }
-    }
-
-    /**
-     * Movie list action listener
-     */
-    public interface ListActionListener {
-
-        void onMovieSelected(Movie movie);
     }
 }
