@@ -29,6 +29,9 @@ public class ReviewsResponse {
 
         public String content;
 
+        public Review() {
+        }
+
         private Review(Parcel in) {
             author = in.readString();
             content = in.readString();

@@ -19,6 +19,7 @@
     <string name="action_share">Share</string>
     <string name="share_text">Check out this cool trailer: %1s</string>
     <string name="share_title">Share movie trailer</string>
+    <string name="empty_favorites">Your favorites list is empty</string>
 
     <!-- Content descriptions -->
     <string name="desc_movie_poster">Movie poster</string>

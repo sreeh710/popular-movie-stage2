@@ -2,6 +2,8 @@ package me.abhelly.movies.fragments;
 
 import com.bumptech.glide.Glide;
 
+import android.annotation.SuppressLint;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -17,7 +19,9 @@ import android.support.design.widget.CollapsingToolbarLayout;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.Fragment;
+import android.support.v4.app.LoaderManager;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.Loader;
 import android.support.v4.graphics.drawable.DrawableCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
@@ -48,6 +52,11 @@ import me.abhelly.movies.api.ReviewsResponse.Review;
 import me.abhelly.movies.api.TmdbService;
 import me.abhelly.movies.api.TrailersResponse;
 import me.abhelly.movies.api.TrailersResponse.Trailer;
+import me.abhelly.movies.async.MovieDetailsStoreAsyncTask;
+import me.abhelly.movies.async.ReviewListLoader;
+import me.abhelly.movies.async.TrailerListLoader;
+import me.abhelly.movies.provider.MovieProvider.ReviewContract;
+import me.abhelly.movies.provider.MovieProvider.TrailerContract;
 import me.abhelly.movies.util.BackdropTransformation;
 import retrofit.Callback;
 import retrofit.RestAdapter;
@@ -58,7 +67,8 @@ import retrofit.client.Response;
  * Fragment represents detailed movie info.
  * Created by abhelly on 07.06.15.
  */
-public class DetailsFragment extends Fragment {
+public class DetailsFragment extends Fragment
+        implements LoaderManager.LoaderCallbacks<ArrayList> {
 
     public final static String MOVIE = "movie";
 
@@ -67,6 +77,10 @@ public class DetailsFragment extends Fragment {
     private final static String ARG_TRAILERS = "trailers";
 
     private final static String ARG_REVIEWS = "reviews";
+
+    private final static int TRAILER_LOADER_ID = 1;
+
+    private final static int REVIEW_LOADER_ID = 2;
 
     private final static String[] RANDOM_COLORS = {"#EF9A9A", "#F48FB1", "#B39DDB", "#9FA8DA",
             "#90CAF9", "#81D4FA", "#80DEEA", "#80CBC4", "#A5D6A7", "#C5E1A5", "#E6EE9C", "#FFE082",
@@ -154,9 +168,11 @@ public class DetailsFragment extends Fragment {
         super.onCreateOptionsMenu(menu, inflater);
         inflater.inflate(R.menu.menu_details, menu);
         mShareMenuItem = menu.findItem(R.id.action_share);
+        mShareMenuItem.setVisible(mTrailers != null && mTrailers.size() > 0);
     }
 
     @Override
+    @SuppressLint("Deprecation")
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.action_share) {
             Intent intent = new Intent();
@@ -223,20 +239,22 @@ public class DetailsFragment extends Fragment {
             mOverviewTextView.setVisibility(View.VISIBLE);
             mEmptyOverviewTextView.setVisibility(View.GONE);
         }
-        setFavorite(isFavorite);
         if (savedInstanceState == null) {
             loadData();
         } else {
+            isFavorite = savedInstanceState.getBoolean(FAVORITE, false);
             mTrailers = savedInstanceState.getParcelableArrayList(ARG_TRAILERS);
             populateTrailers();
             mReviews = savedInstanceState.getParcelableArrayList(ARG_REVIEWS);
             populateReviews();
         }
+        setFavorite(isFavorite);
         return v;
     }
 
     @Override
     public void onSaveInstanceState(Bundle outState) {
+        outState.putBoolean(FAVORITE, isFavorite);
         outState.putParcelableArrayList(ARG_TRAILERS, mTrailers);
         outState.putParcelableArrayList(ARG_REVIEWS, mReviews);
         super.onSaveInstanceState(outState);
@@ -278,6 +296,7 @@ public class DetailsFragment extends Fragment {
         } else {
             list.remove(mMovie.id);
         }
+
         StringBuilder sb = new StringBuilder();
         for (Long id : list) {
             sb.append(id).append(",");
@@ -296,18 +315,20 @@ public class DetailsFragment extends Fragment {
 
     /** Loads data first from local db, then updates from server. */
     private void loadData() {
-        // TODO: first, load from db
+        // first, load trailers and reviews from db, then update from server
+        getActivity().getSupportLoaderManager().restartLoader(TRAILER_LOADER_ID, null, this);
+        getActivity().getSupportLoaderManager().restartLoader(REVIEW_LOADER_ID, null, this);
         refreshData();
     }
 
     /** Loads data from servers, stores response to local db. */
     private void refreshData() {
-        // TODO: store both responses to db
         mTmdbService.getTrailers(mMovie.id, new Callback<TrailersResponse>() {
             @Override
             public void success(TrailersResponse trailers, Response response) {
                 mTrailers = trailers.results;
                 populateTrailers();
+                storeTrailers();
             }
 
             @Override
@@ -320,6 +341,7 @@ public class DetailsFragment extends Fragment {
             public void success(ReviewsResponse reviews, Response response) {
                 mReviews = reviews.results;
                 populateReviews();
+                storeReviews();
             }
 
             @Override
@@ -336,7 +358,7 @@ public class DetailsFragment extends Fragment {
             return;
         }
         if (mTrailers != null && mTrailers.size() > 0) {
-            mEmptyTrailersTextView.setVisibility(View.GONE);
+            mTrailersParent.removeAllViews();
             Context context = getActivity();
             int paddingSmall = Math.round(getResources().getDimension(R.dimen.margin_small));
             int paddingTiny = Math.round(getResources().getDimension(R.dimen.margin_tiny));
@@ -354,17 +376,24 @@ public class DetailsFragment extends Fragment {
                 });
                 mTrailersParent.addView(view);
             }
+            mEmptyTrailersTextView.setVisibility(View.GONE);
+            mTrailersParent.setVisibility(View.VISIBLE);
+            if (mShareMenuItem != null) {
+                mShareMenuItem.setVisible(true);
+            }
         } else {
-            mShareMenuItem.setVisible(false);
+            mEmptyTrailersTextView.setVisibility(View.VISIBLE);
+            mTrailersParent.setVisibility(View.GONE);
         }
     }
 
+    @SuppressLint("Deprecation")
     private void populateReviews() {
         if (!isAdded()) {
             return;
         }
         if (mReviews != null && mReviews.size() > 0) {
-            mEmptyReviewsTextView.setVisibility(View.GONE);
+            mReviewsParent.removeAllViews();
             LayoutInflater inflater = LayoutInflater.from(getActivity());
             Random random = new Random();
             for (Review item : mReviews) {
@@ -383,6 +412,11 @@ public class DetailsFragment extends Fragment {
                 }
                 mReviewsParent.addView(view);
             }
+            mEmptyReviewsTextView.setVisibility(View.GONE);
+            mReviewsParent.setVisibility(View.VISIBLE);
+        } else {
+            mEmptyReviewsTextView.setVisibility(View.VISIBLE);
+            mReviewsParent.setVisibility(View.GONE);
         }
     }
 
@@ -402,6 +436,72 @@ public class DetailsFragment extends Fragment {
         ratingIcon = DrawableCompat.wrap(ratingIcon);
         DrawableCompat.setTint(ratingIcon, getResources().getColor(R.color.icon_tint));
         view.setCompoundDrawablesWithIntrinsicBounds(ratingIcon, null, null, null);
+    }
+
+    /**
+     * Data storage
+     */
+    private void storeTrailers() {
+        if (mTrailers.size() == 0) {
+            return;
+        }
+        ContentValues[] values = new ContentValues[mTrailers.size()];
+        for (int i = 0; i < mTrailers.size(); i++) {
+            Trailer item = mTrailers.get(i);
+            ContentValues value = new ContentValues();
+            value.put(TrailerContract.MOVIE_ID, mMovie.id);
+            value.put(TrailerContract.KEY, item.key);
+            value.put(TrailerContract.NAME, item.name);
+            values[i] = value;
+        }
+        new MovieDetailsStoreAsyncTask(getActivity(),
+                TrailerContract.CONTENT_URI, mMovie.id)
+                .execute(values);
+    }
+
+    private void storeReviews() {
+        if (mReviews.size() == 0) {
+            return;
+        }
+        ContentValues[] values = new ContentValues[mReviews.size()];
+        for (int i = 0; i < mReviews.size(); i++) {
+            Review item = mReviews.get(i);
+            ContentValues value = new ContentValues();
+            value.put(ReviewContract.MOVIE_ID, mMovie.id);
+            value.put(ReviewContract.AUTHOR, item.author);
+            value.put(ReviewContract.CONTENT, item.content);
+            values[i] = value;
+        }
+        new MovieDetailsStoreAsyncTask(getActivity(),
+                ReviewContract.CONTENT_URI, mMovie.id)
+                .execute(values);
+    }
+
+    /**
+     * Loader callbacks
+     */
+    @Override
+    public Loader onCreateLoader(int id, Bundle args) {
+        if (id == TRAILER_LOADER_ID) {
+            return new TrailerListLoader(getActivity(), mMovie.id);
+        } else {
+            return new ReviewListLoader(getActivity(), mMovie.id);
+        }
+    }
+
+    @Override
+    public void onLoadFinished(Loader loader, ArrayList data) {
+        if (loader.getId() == TRAILER_LOADER_ID) {
+            mTrailers = data;
+            populateTrailers();
+        } else {
+            mReviews = data;
+            populateReviews();
+        }
+    }
+
+    @Override
+    public void onLoaderReset(Loader loader) {
     }
 
     class ReviewViewHolder {

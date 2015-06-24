@@ -28,11 +28,13 @@ public class DetailsActivity extends AppCompatActivity {
             throw new NullPointerException("No movie found in intent extras");
         }
 
-        DetailsFragment fragment = DetailsFragment.getInstance(movie, isFavorite);
-        getSupportFragmentManager()
-                .beginTransaction()
-                .replace(R.id.container, fragment)
-                .commit();
+        if (savedInstanceState == null) {
+            DetailsFragment fragment = DetailsFragment.getInstance(movie, isFavorite);
+            getSupportFragmentManager()
+                    .beginTransaction()
+                    .replace(R.id.container, fragment)
+                    .commit();
+        }
     }
 
     @Override

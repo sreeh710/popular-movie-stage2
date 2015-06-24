@@ -30,6 +30,9 @@ public class TrailersResponse {
 
         public String name;
 
+        public Trailer() {
+        }
+
         private Trailer(Parcel in) {
             key = in.readString();
             name = in.readString();

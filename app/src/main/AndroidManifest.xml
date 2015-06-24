@@ -25,5 +25,9 @@
             android:label="@string/label_details"
             android:theme="@style/Details.MovieTheme" />
 
+        <provider
+            android:name="me.abhelly.movies.provider.MovieProvider"
+            android:authorities="me.abhelly.movie"
+            android:exported="false" />
     </application>
 </manifest>

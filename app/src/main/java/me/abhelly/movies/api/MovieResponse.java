@@ -48,6 +48,9 @@ public class MovieResponse {
         @SerializedName("release_date")
         public String releaseDate;
 
+        public Movie() {
+        }
+
         private Movie(Parcel in) {
             id = in.readLong();
             title = in.readString();

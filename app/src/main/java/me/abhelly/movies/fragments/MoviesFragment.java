@@ -10,6 +10,8 @@ import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
+import android.support.v4.app.LoaderManager;
+import android.support.v4.content.Loader;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
@@ -31,6 +33,8 @@ import me.abhelly.movies.api.MovieResponse;
 import me.abhelly.movies.api.MovieResponse.Movie;
 import me.abhelly.movies.api.RetrofitAdapter;
 import me.abhelly.movies.api.TmdbService;
+import me.abhelly.movies.async.MovieListLoader;
+import me.abhelly.movies.async.MovieStoreAsyncTask;
 import retrofit.Callback;
 import retrofit.RestAdapter;
 import retrofit.RetrofitError;
@@ -40,7 +44,8 @@ import retrofit.client.Response;
  * Movie list fragment, displays movie posters sorted according to settings.
  * Created by abhelly on 07.06.15.
  */
-public class MoviesFragment extends Fragment {
+public class MoviesFragment extends Fragment
+        implements LoaderManager.LoaderCallbacks<ArrayList<Movie>> {
 
     private final static String ARG_ITEMS = "items";
 
@@ -52,7 +57,14 @@ public class MoviesFragment extends Fragment {
 
     private final static int VIEW_STATE_ERROR = 1;
 
-    private final static int VIEW_STATE_RESULTS = 2;
+    private final static int VIEW_STATE_EMPTY = 2;
+
+    private final static int VIEW_STATE_RESULTS = 3;
+
+    private final static int LOADER_ID = 1;
+
+    @InjectView(R.id.empty_text_view)
+    TextView mEmptyTextView;
 
     @InjectView(R.id.error_text_view)
     TextView mErrorTextView;
@@ -86,7 +98,8 @@ public class MoviesFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        updateFavorites();
+        // TODO: if favs has changed, restart loader? or activity will notify?
+        loadFavorites();
     }
 
     @Nullable
@@ -126,6 +139,9 @@ public class MoviesFragment extends Fragment {
                     mRecyclerView.scrollToPosition(0);
                     showResultViews();
                     break;
+                case VIEW_STATE_EMPTY:
+                    showEmptyViews();
+                    break;
                 default:
                     showLoadingViews();
                     break;
@@ -141,6 +157,8 @@ public class MoviesFragment extends Fragment {
             state = VIEW_STATE_LOADING;
         } else if (mErrorTextView.getVisibility() == View.VISIBLE) {
             state = VIEW_STATE_ERROR;
+        } else if (mEmptyTextView.getVisibility() == View.VISIBLE) {
+            state = VIEW_STATE_EMPTY;
         }
         outState.putInt(ARG_VIEW_STATE, state);
         outState.putParcelableArrayList(ARG_ITEMS, mAdapter.getItems());
@@ -162,37 +180,37 @@ public class MoviesFragment extends Fragment {
         editor.apply();
     }
 
-    /**
-     * Updates favorites list.
-     */
-    private void updateFavorites() {
+    /** Returns favorites list. */
+    private ArrayList<Long> loadFavorites() {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
         String favoritesString = prefs.getString(getString(R.string.prefs_favorites), "");
+        ArrayList<Long> list = new ArrayList<>();
         if (favoritesString.length() > 0) {
-            ArrayList<Long> list = new ArrayList<>();
             StringTokenizer st = new StringTokenizer(favoritesString, ",");
             while (st.hasMoreTokens()) {
                 list.add(Long.parseLong(st.nextToken()));
             }
+        }
+        if (mAdapter != null) {
             mAdapter.setFavorites(list);
         }
+        return list;
     }
 
-    /**
-     * Loads data from server or from db.
-     */
+    /** Loads data from server or from db. */
     private void populateData() {
         // load from db or from server
-        if (mSortOrder.equals(getString(R.string.sort_favorites))) {
-            // TODO: get from db
+        if (mSortOrder.equals(getString(R.string.sort_order_favorites))) {
+            showLoadingViews();
+            getActivity().getSupportLoaderManager().restartLoader(LOADER_ID, null, this);
         } else {
+            getActivity().getSupportLoaderManager().destroyLoader(LOADER_ID);
+            loadFavorites();
             loadData();
         }
     }
 
-    /**
-     * Loads movie list.
-     */
+    /** Loads movie list. */
     private void loadData() {
         showLoadingViews();
         RestAdapter adapter = RetrofitAdapter.getRestAdapter();
@@ -203,6 +221,7 @@ public class MoviesFragment extends Fragment {
                 showResultViews();
                 mAdapter.setItems(movieResponse.results);
                 mRecyclerView.scrollToPosition(0);
+                storeMovies(movieResponse.results);
             }
 
             @Override
@@ -212,9 +231,7 @@ public class MoviesFragment extends Fragment {
         });
     }
 
-    /**
-     * Retries to reload movie list from server.
-     */
+    /** Retries to reload movie list from server. */
     private void reload() {
         loadData();
     }
@@ -238,39 +255,72 @@ public class MoviesFragment extends Fragment {
         mErrorTextView.setVisibility(View.GONE);
         mRetryButton.setVisibility(View.GONE);
         mRecyclerView.setVisibility(View.GONE);
+        mEmptyTextView.setVisibility(View.GONE);
     }
 
-    /**
-     * Helper method to hide all elements, except error views.
-     */
+    /** Helper method to hide all elements, except error views. */
     private void showErrorViews() {
         mErrorTextView.setVisibility(View.VISIBLE);
         mRetryButton.setVisibility(View.VISIBLE);
         mProgressBar.setVisibility(View.GONE);
         mRecyclerView.setVisibility(View.GONE);
+        mEmptyTextView.setVisibility(View.GONE);
     }
 
-    /**
-     * Helper method to hide all elements, except recycler view.
-     */
-    private void showResultViews() {
-        mRecyclerView.setVisibility(View.VISIBLE);
+    /** Helper method to hide all elements, except empty view. */
+    private void showEmptyViews() {
+        mEmptyTextView.setVisibility(View.VISIBLE);
+        mRecyclerView.setVisibility(View.GONE);
         mProgressBar.setVisibility(View.GONE);
         mErrorTextView.setVisibility(View.GONE);
         mRetryButton.setVisibility(View.GONE);
     }
 
-    /**
-     * Movie list action listener
-     */
+
+    /** Helper method to hide all elements, except recycler view. */
+    private void showResultViews() {
+        mRecyclerView.setVisibility(View.VISIBLE);
+        mProgressBar.setVisibility(View.GONE);
+        mErrorTextView.setVisibility(View.GONE);
+        mRetryButton.setVisibility(View.GONE);
+        mEmptyTextView.setVisibility(View.GONE);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void storeMovies(ArrayList<Movie> movieList) {
+        new MovieStoreAsyncTask(getActivity()).execute(movieList);
+    }
+
+    @Override
+    public Loader<ArrayList<Movie>> onCreateLoader(int id, Bundle args) {
+        return new MovieListLoader(getActivity(), loadFavorites());
+    }
+
+    @Override
+    public void onLoadFinished(Loader<ArrayList<Movie>> loader, ArrayList<Movie> data) {
+        if (data == null) {
+            showErrorViews();
+        } else if (data.size() > 0) {
+            mAdapter.setItems(data);
+            mRecyclerView.scrollToPosition(0);
+            showResultViews();
+        } else {
+            showEmptyViews();
+        }
+    }
+
+    @Override
+    public void onLoaderReset(Loader<ArrayList<Movie>> loader) {
+
+    }
+
+    /** Movie list action listener */
     public interface ListActionListener {
 
         void onMovieSelected(Movie movie, boolean isFavorite);
     }
 
-    /**
-     * Movies RecyclerView adapter class.
-     */
+    /** Movies RecyclerView adapter class. */
     private static class MoviesAdapter extends RecyclerView.Adapter<MovieViewHolder> {
 
         final private Context mContext;
@@ -285,7 +335,6 @@ public class MoviesFragment extends Fragment {
             mContext = context;
             mActionListener = listener;
             mItems = new ArrayList<>();
-            mFavorites = new ArrayList<>();
         }
 
         @Override
@@ -307,7 +356,7 @@ public class MoviesFragment extends Fragment {
                 @Override
                 public void onClick(View view) {
                     Movie movie = mItems.get(position);
-                    boolean isFavorite = mFavorites.contains(movie.id);
+                    boolean isFavorite = (mFavorites != null && mFavorites.contains(movie.id));
                     mActionListener.onMovieSelected(movie, isFavorite);
                 }
             });
@@ -333,9 +382,7 @@ public class MoviesFragment extends Fragment {
 
     }
 
-    /**
-     * Movie view holder class.
-     */
+    /** Movie view holder class. */
     static class MovieViewHolder extends RecyclerView.ViewHolder {
 
         @InjectView(R.id.poster_image_view)

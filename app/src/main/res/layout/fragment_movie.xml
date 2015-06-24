@@ -140,14 +140,15 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingBottom="@dimen/margin_medium">
+                android:paddingBottom="@dimen/margin_medium"
+                android:visibility="gone" />
 
-                <TextView
-                    android:id="@+id/empty_trailers_text_view"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/empty_trailers" />
-            </LinearLayout>
+            <TextView
+                android:id="@+id/empty_trailers_text_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="@dimen/margin_medium"
+                android:text="@string/empty_trailers" />
 
             <!-- here goes review section -->
             <TextView
@@ -163,14 +164,15 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingBottom="@dimen/margin_medium">
+                android:paddingBottom="@dimen/margin_medium"
+                android:visibility="gone" />
 
-                <TextView
-                    android:id="@+id/empty_reviews_text_view"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/empty_reviews" />
-            </LinearLayout>
+            <TextView
+                android:id="@+id/empty_reviews_text_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="@dimen/margin_medium"
+                android:text="@string/empty_reviews" />
         </LinearLayout>
     </android.support.v4.widget.NestedScrollView>
 
