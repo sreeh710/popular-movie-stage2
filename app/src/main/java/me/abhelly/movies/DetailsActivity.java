@@ -1,5 +1,6 @@
 package me.abhelly.movies;
 
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.view.MenuItem;
@@ -8,7 +9,7 @@ import me.abhelly.movies.api.MovieResponse;
 import me.abhelly.movies.fragments.DetailsFragment;
 
 /**
- * Activity hosts movie detailed view.
+ * Activity that hosts movie detailed view.
  * Created by abhelly on 11.06.15.
  */
 public class DetailsActivity extends AppCompatActivity {
@@ -16,6 +17,12 @@ public class DetailsActivity extends AppCompatActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // finish if it's 7" landscape
+        int orientation = getResources().getConfiguration().orientation;
+        int sw = getResources().getConfiguration().smallestScreenWidthDp;
+        if (sw == 600 && orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            finish();
+        }
         setContentView(R.layout.activity_details);
 
         MovieResponse.Movie movie;

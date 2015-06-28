@@ -29,16 +29,17 @@ public class MovieDetailsStoreAsyncTask extends AsyncTask<ContentValues[], Void,
 
     @Override
     final protected Void doInBackground(ContentValues[]... params) {
-        // remove all trailers/reviews for given movie id
-        ContentResolver cr = mContext.getContentResolver();
-        cr.delete(mContentUri,
-                MovieProvider.COL_MOVIE_ID + "=?",
-                new String[]{Long.toString(mMovieId)});
+        if (mContext != null) {
+            // remove all trailers/reviews for given movie id
+            ContentResolver cr = mContext.getContentResolver();
+            cr.delete(mContentUri,
+                    MovieProvider.COL_MOVIE_ID + "=?",
+                    new String[]{Long.toString(mMovieId)});
 
-        // insert all trailers/reviews
-        ContentValues[] values = params[0];
-        cr.bulkInsert(mContentUri, values);
-
+            // insert all trailers/reviews
+            ContentValues[] values = params[0];
+            cr.bulkInsert(mContentUri, values);
+        }
         return null;
     }
 }

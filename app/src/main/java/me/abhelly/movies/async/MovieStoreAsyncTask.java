@@ -27,27 +27,29 @@ public class MovieStoreAsyncTask extends AsyncTask<ArrayList<MovieResponse.Movie
     @SafeVarargs
     @Override
     final protected Void doInBackground(ArrayList<MovieResponse.Movie>... params) {
-        ArrayList<MovieResponse.Movie> movieList = params[0];
-        Uri contentUri = MovieProvider.MovieContract.CONTENT_URI;
-        ContentResolver cr = mContext.getContentResolver();
-        ArrayList<ContentValues> updateValues = new ArrayList<>();
-        for (MovieResponse.Movie item : movieList) {
-            ContentValues value = new ContentValues();
-            value.put(MovieProvider.MovieContract._ID, item.id);
-            value.put(MovieProvider.MovieContract.TITLE, item.title);
-            value.put(MovieProvider.MovieContract.BACKDROP_PATH, item.backdropPath);
-            value.put(MovieProvider.MovieContract.POSTER_PATH, item.posterPath);
-            value.put(MovieProvider.MovieContract.OVERVIEW, item.overview);
-            value.put(MovieProvider.MovieContract.RATING, item.rating);
-            value.put(MovieProvider.MovieContract.RELEASE_DATE, item.releaseDate);
-            Uri uri = cr.insert(contentUri, value);
-            if (uri.compareTo(Uri.withAppendedPath(contentUri, Long.toString(item.id))) < 0) {
-                updateValues.add(value);
+        if (mContext != null) {
+            ArrayList<MovieResponse.Movie> movieList = params[0];
+            Uri contentUri = MovieProvider.MovieContract.CONTENT_URI;
+            ContentResolver cr = mContext.getContentResolver();
+            ArrayList<ContentValues> updateValues = new ArrayList<>();
+            for (MovieResponse.Movie item : movieList) {
+                ContentValues value = new ContentValues();
+                value.put(MovieProvider.MovieContract._ID, item.id);
+                value.put(MovieProvider.MovieContract.TITLE, item.title);
+                value.put(MovieProvider.MovieContract.BACKDROP_PATH, item.backdropPath);
+                value.put(MovieProvider.MovieContract.POSTER_PATH, item.posterPath);
+                value.put(MovieProvider.MovieContract.OVERVIEW, item.overview);
+                value.put(MovieProvider.MovieContract.RATING, item.rating);
+                value.put(MovieProvider.MovieContract.RELEASE_DATE, item.releaseDate);
+                Uri uri = cr.insert(contentUri, value);
+                if (uri.compareTo(Uri.withAppendedPath(contentUri, Long.toString(item.id))) < 0) {
+                    updateValues.add(value);
+                }
             }
-        }
-        for (ContentValues value : updateValues) {
-            cr.update(contentUri, value, MovieProvider.MovieContract._ID + "=?",
-                    new String[]{value.getAsString(MovieProvider.MovieContract._ID)});
+            for (ContentValues value : updateValues) {
+                cr.update(contentUri, value, MovieProvider.MovieContract._ID + "=?",
+                        new String[]{value.getAsString(MovieProvider.MovieContract._ID)});
+            }
         }
         return null;
     }

@@ -11,6 +11,7 @@
         android:layout_height="@dimen/avatar_size"
         android:layout_marginRight="@dimen/margin_small"
         android:background="@drawable/circle_background"
+        android:contentDescription="@string/desc_user_avatar"
         android:scaleType="center"
         android:src="@drawable/ic_person" />
 

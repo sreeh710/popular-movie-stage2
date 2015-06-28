@@ -5,7 +5,6 @@ import com.bumptech.glide.load.engine.Resource;
 import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
 import com.bumptech.glide.load.resource.bitmap.BitmapResource;
 
-import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.ColorMatrix;
@@ -18,12 +17,9 @@ import android.graphics.Paint;
  */
 public class BackdropTransformation implements Transformation<Bitmap> {
 
-    private Context mContext;
-
     private BitmapPool mBitmapPool;
 
-    public BackdropTransformation(Context context, BitmapPool pool) {
-        mContext = context;
+    public BackdropTransformation(BitmapPool pool) {
         mBitmapPool = pool;
     }
 

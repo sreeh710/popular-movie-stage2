@@ -15,7 +15,7 @@ import me.abhelly.movies.provider.MovieProvider;
  */
 public class MovieListLoader extends AsyncTaskLoader<ArrayList<Movie>> {
 
-    ArrayList<Long> mFavoriteIds;
+    private ArrayList<Long> mFavoriteIds;
 
     public MovieListLoader(Context context, ArrayList<Long> favoriteIds) {
         super(context);

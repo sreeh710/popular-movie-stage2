@@ -2,7 +2,7 @@ package me.abhelly.movies.fragments;
 
 import com.bumptech.glide.Glide;
 
-import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
@@ -127,9 +127,7 @@ public class DetailsFragment extends Fragment
     @InjectView(R.id.empty_reviews_text_view)
     TextView mEmptyReviewsTextView;
 
-    MenuItem mShareMenuItem;
-
-    private boolean mTabletLayout;
+    private MenuItem mShareMenuItem;
 
     private Movie mMovie;
 
@@ -141,6 +139,8 @@ public class DetailsFragment extends Fragment
 
     private TmdbService mTmdbService;
 
+    private DetailsActionListener mActionListener;
+
     public static DetailsFragment getInstance(Movie movie, boolean isFavorite) {
         DetailsFragment fragment = new DetailsFragment();
         Bundle args = new Bundle();
@@ -148,6 +148,14 @@ public class DetailsFragment extends Fragment
         args.putBoolean(FAVORITE, isFavorite);
         fragment.setArguments(args);
         return fragment;
+    }
+
+    @Override
+    public void onAttach(Activity activity) {
+        super.onAttach(activity);
+        if (activity instanceof DetailsActionListener) {
+            mActionListener = (DetailsActionListener) activity;
+        }
     }
 
     @Override
@@ -168,11 +176,11 @@ public class DetailsFragment extends Fragment
         super.onCreateOptionsMenu(menu, inflater);
         inflater.inflate(R.menu.menu_details, menu);
         mShareMenuItem = menu.findItem(R.id.action_share);
-        mShareMenuItem.setVisible(mTrailers != null && mTrailers.size() > 0);
+        mShareMenuItem.setVisible(isVisible() && mTrailers != null && mTrailers.size() > 0);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
-    @SuppressLint("Deprecation")
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.action_share) {
             Intent intent = new Intent();
@@ -183,7 +191,7 @@ public class DetailsFragment extends Fragment
             } else {
                 intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET);
             }
-            intent.putExtra(Intent.EXTRA_TEXT, getString(R.string.share_text,
+            intent.putExtra(Intent.EXTRA_TEXT, getString(R.string.share_text, mMovie.title,
                     mTrailers.get(0).getYoutubeLink()));
             startActivity(Intent.createChooser(intent, getString(R.string.share_title)));
             return true;
@@ -198,8 +206,8 @@ public class DetailsFragment extends Fragment
         View v = inflater.inflate(R.layout.fragment_movie, container, false);
         ButterKnife.inject(this, v);
 
-        mTabletLayout = (mToolbar == null);
-        if (!mTabletLayout) {
+        boolean isDualPane = (mToolbar == null);
+        if (!isDualPane) {
             ((AppCompatActivity) getActivity()).setSupportActionBar(mToolbar);
             ActionBar actionBar = ((AppCompatActivity) getActivity()).getSupportActionBar();
             if (actionBar != null) {
@@ -213,21 +221,14 @@ public class DetailsFragment extends Fragment
         setCompoundDrawable(mDateTextView, R.drawable.ic_release);
 
         // setup data
-        if (!mTabletLayout) {
-            BackdropTransformation transformation = new BackdropTransformation(getActivity(),
-                    Glide.get(getActivity()).getBitmapPool());
-            Glide.with(this)
-                    .load(mMovie.getBackdropUrl())
-                    .centerCrop()
-                    .bitmapTransform(transformation)
-                    .into(mBackdropImageView);
-        } else {
-            // TODO: revisit it
-            Glide.with(this)
-                    .load(mMovie.getBackdropUrl())
-                    .centerCrop()
-                    .into(mBackdropImageView);
-        }
+        BackdropTransformation transformation = new BackdropTransformation(
+                Glide.get(getActivity()).getBitmapPool());
+        Glide.with(this)
+                .load(mMovie.getBackdropUrl())
+                .centerCrop()
+                .crossFade()
+                .bitmapTransform(transformation)
+                .into(mBackdropImageView);
         Glide.with(this)
                 .load(mMovie.getPosterUrl())
                 .crossFade()
@@ -260,30 +261,30 @@ public class DetailsFragment extends Fragment
         super.onSaveInstanceState(outState);
     }
 
-    /**
-     * Action handlers.
-     */
+    /** OnClick listener handler. */
     @OnClick(R.id.favorite_action_button)
     void onFavoriteAction() {
         favoriteMovie();
-        String message = (isFavorite)
-                ? getString(R.string.favorite_added)
-                : getString(R.string.favorite_removed);
-        Snackbar
-                .make(getView(), message, Snackbar.LENGTH_LONG)
-                .setAction(R.string.favorite_undo, new View.OnClickListener() {
-                    @Override
-                    public void onClick(View view) {
-                        favoriteMovie();
-                    }
-                })
-                .show();
+        if (mActionListener == null) {
+            // snackbar is only for single pane
+            String message = (isFavorite)
+                    ? getString(R.string.favorite_added)
+                    : getString(R.string.favorite_removed);
+            Snackbar
+                    .make(getView(), message, Snackbar.LENGTH_LONG)
+                    .setAction(R.string.favorite_undo, new View.OnClickListener() {
+                        @Override
+                        public void onClick(View view) {
+                            favoriteMovie();
+                        }
+                    })
+                    .show();
+        }
     }
 
     /** Marks current movie as favorite/not favorite, updates favorites list. */
     private void favoriteMovie() {
         setFavorite(!isFavorite);
-        // TODO: notify movies fragment if tablet
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
         String favoritesString = prefs.getString(getString(R.string.prefs_favorites), "");
         ArrayList<Long> list = new ArrayList<>();
@@ -304,8 +305,12 @@ public class DetailsFragment extends Fragment
         SharedPreferences.Editor editor = prefs.edit();
         editor.putString(getString(R.string.prefs_favorites), sb.toString());
         editor.apply();
+        if (mActionListener != null) {
+            mActionListener.onFavoriteAction(mMovie.id);
+        }
     }
 
+    /** Opens first trailer link in browser/youtube. */
     private void openTrailer(String url) {
         Intent intent = new Intent();
         intent.setAction(Intent.ACTION_VIEW);
@@ -387,7 +392,7 @@ public class DetailsFragment extends Fragment
         }
     }
 
-    @SuppressLint("Deprecation")
+    @SuppressWarnings("deprecation")
     private void populateReviews() {
         if (!isAdded()) {
             return;
@@ -428,7 +433,9 @@ public class DetailsFragment extends Fragment
         } else {
             resId = R.drawable.ic_action_favorite;
         }
-        mActionButton.setImageDrawable(ContextCompat.getDrawable(getActivity(), resId));
+        if (getActivity() != null) {
+            mActionButton.setImageDrawable(ContextCompat.getDrawable(getActivity(), resId));
+        }
     }
 
     private void setCompoundDrawable(TextView view, int resId) {
@@ -502,6 +509,11 @@ public class DetailsFragment extends Fragment
 
     @Override
     public void onLoaderReset(Loader loader) {
+    }
+
+    public interface DetailsActionListener {
+
+        void onFavoriteAction(long movieId);
     }
 
     class ReviewViewHolder {

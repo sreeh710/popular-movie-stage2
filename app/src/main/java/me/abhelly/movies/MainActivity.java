@@ -4,13 +4,17 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentManager;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.FrameLayout;
 
 import butterknife.ButterKnife;
 import butterknife.InjectView;
+import butterknife.Optional;
 import me.abhelly.movies.api.MovieResponse;
 import me.abhelly.movies.fragments.DetailsFragment;
 import me.abhelly.movies.fragments.MoviesFragment;
@@ -19,12 +23,23 @@ import me.abhelly.movies.fragments.MoviesFragment;
  * Movie list activity.
  * Created by abhelly on 07.06.15.
  */
-public class MainActivity extends AppCompatActivity implements MoviesFragment.ListActionListener {
+public class MainActivity extends AppCompatActivity implements MoviesFragment.ListActionListener,
+        DetailsFragment.DetailsActionListener {
+
+    private final static String TAG_MOVIE_LIST = "movie_list_fragment";
+
+    private final static String TAG_DETAILS = "details_fragment";
 
     @InjectView(R.id.toolbar)
     Toolbar mToolbar;
 
-    MoviesFragment mMoviesFragment;
+    @Optional
+    @InjectView(R.id.details_placeholder)
+    FrameLayout mDetailsPlaceholder;
+
+    private MoviesFragment mMoviesFragment;
+
+    private boolean isDualPane;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,8 +49,18 @@ public class MainActivity extends AppCompatActivity implements MoviesFragment.Li
 
         setSupportActionBar(mToolbar);
 
-        mMoviesFragment = (MoviesFragment) getSupportFragmentManager()
-                .findFragmentById(R.id.movies_fragment);
+        isDualPane = (mDetailsPlaceholder != null);
+        if (savedInstanceState == null) {
+            mMoviesFragment = MoviesFragment.getInstance(isDualPane);
+            getSupportFragmentManager()
+                    .beginTransaction()
+                    .replace(R.id.movie_list_placeholder, mMoviesFragment, TAG_MOVIE_LIST)
+                    .commit();
+        } else {
+            mMoviesFragment = (MoviesFragment) getSupportFragmentManager()
+                    .findFragmentByTag(TAG_MOVIE_LIST);
+            mMoviesFragment.setDualPane(isDualPane);
+        }
     }
 
     @Override
@@ -54,6 +79,7 @@ public class MainActivity extends AppCompatActivity implements MoviesFragment.Li
             selectedId = R.id.sort_order_popularity;
         }
         menu.findItem(selectedId).setChecked(true);
+
         return true;
     }
 
@@ -81,9 +107,33 @@ public class MainActivity extends AppCompatActivity implements MoviesFragment.Li
 
     @Override
     public void onMovieSelected(MovieResponse.Movie movie, boolean isFavorite) {
-        Intent intent = new Intent(this, DetailsActivity.class);
-        intent.putExtra(DetailsFragment.MOVIE, movie);
-        intent.putExtra(DetailsFragment.FAVORITE, isFavorite);
-        startActivity(intent);
+        if (!isDualPane) {
+            Intent intent = new Intent(this, DetailsActivity.class);
+            intent.putExtra(DetailsFragment.MOVIE, movie);
+            intent.putExtra(DetailsFragment.FAVORITE, isFavorite);
+            startActivity(intent);
+        } else {
+            DetailsFragment fragment = DetailsFragment.getInstance(movie, isFavorite);
+            getSupportFragmentManager()
+                    .beginTransaction()
+                    .replace(R.id.details_placeholder, fragment, TAG_DETAILS)
+                    .commitAllowingStateLoss();
+        }
+    }
+
+    @Override
+    public void onEmptyMovieList() {
+        FragmentManager fm = getSupportFragmentManager();
+        Fragment fragment = fm.findFragmentByTag(TAG_DETAILS);
+        if (isDualPane && fragment != null) {
+            fm.beginTransaction()
+                    .remove(fragment)
+                    .commitAllowingStateLoss();
+        }
+    }
+
+    @Override
+    public void onFavoriteAction(long movieId) {
+        mMoviesFragment.favoriteListChanged(movieId);
     }
 }

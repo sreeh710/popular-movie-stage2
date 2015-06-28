@@ -16,9 +16,9 @@ import android.net.Uri;
  */
 public class MovieProvider extends ProviGenProvider {
 
-    public static final String AUTHORITY = "content://me.abhelly.movie/";
-
     public static final String COL_MOVIE_ID = "movie_id";
+
+    private static final String AUTHORITY = "content://me.abhelly.movie/";
 
     private static Class[] contracts = new Class[]{
             MovieContract.class, TrailerContract.class, ReviewContract.class};
@@ -33,6 +33,9 @@ public class MovieProvider extends ProviGenProvider {
         return contracts;
     }
 
+    /**
+     * Movie data model contract.
+     */
     public interface MovieContract extends ProviGenBaseContract {
 
         @Column(Column.Type.TEXT)
@@ -57,6 +60,9 @@ public class MovieProvider extends ProviGenProvider {
         Uri CONTENT_URI = Uri.parse(AUTHORITY + "movie");
     }
 
+    /**
+     * Movie trailer data model contract.
+     */
     public interface TrailerContract extends ProviGenBaseContract {
 
         @Column(Column.Type.TEXT)
@@ -73,6 +79,9 @@ public class MovieProvider extends ProviGenProvider {
 
     }
 
+    /**
+     * Movie review data model contract.
+     */
     public interface ReviewContract extends ProviGenBaseContract {
 
         @Column(Column.Type.TEXT)

@@ -1,9 +1,9 @@
 <resources>
 
-    <style name="MovieTheme" parent="Base.MovieTheme"></style>
+    <style name="MovieTheme" parent="Base.MovieTheme" />
 
     <!-- Details activity style -->
-    <style name="Details.MovieTheme" parent="MovieTheme"></style>
+    <style name="Details.MovieTheme" parent="MovieTheme" />
 
     <style name="Base.MovieTheme" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="colorPrimary">@color/primary</item>

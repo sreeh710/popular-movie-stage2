@@ -6,11 +6,14 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
+import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.LoaderManager;
+import android.support.v4.content.ContextCompat;
 import android.support.v4.content.Loader;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
@@ -47,7 +50,11 @@ import retrofit.client.Response;
 public class MoviesFragment extends Fragment
         implements LoaderManager.LoaderCallbacks<ArrayList<Movie>> {
 
+    private final static String IS_DUAL_PANE = "is_dual_pane";
+
     private final static String ARG_ITEMS = "items";
+
+    private final static String ARG_SELECTED_ITEM = "selected_item";
 
     private final static String ARG_SORT_ORDER = "sort_order";
 
@@ -84,6 +91,16 @@ public class MoviesFragment extends Fragment
 
     private ListActionListener mActionListener;
 
+    private boolean isDualPane;
+
+    public static MoviesFragment getInstance(boolean isDualPane) {
+        MoviesFragment fragment = new MoviesFragment();
+        Bundle args = new Bundle();
+        args.putBoolean(IS_DUAL_PANE, isDualPane);
+        fragment.setArguments(args);
+        return fragment;
+    }
+
     @Override
     public void onAttach(Activity activity) {
         super.onAttach(activity);
@@ -98,8 +115,18 @@ public class MoviesFragment extends Fragment
     @Override
     public void onResume() {
         super.onResume();
-        // TODO: if favs has changed, restart loader? or activity will notify?
         loadFavorites();
+        if (!isDualPane && mSortOrder.equals(getString(R.string.sort_order_favorites))
+                && mAdapter.getItemCount() > 0) {
+            // update favorites list
+            populateData();
+        }
+    }
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        isDualPane = getArguments().getBoolean(IS_DUAL_PANE, false);
     }
 
     @Nullable
@@ -115,10 +142,8 @@ public class MoviesFragment extends Fragment
                 reload();
             }
         });
-        int orientation = getResources().getConfiguration().orientation;
-        int spanCount = (orientation == Configuration.ORIENTATION_LANDSCAPE) ? 4 : 2;
-        mRecyclerView.setLayoutManager(new GridLayoutManager(getActivity(), spanCount));
-        mAdapter = new MoviesAdapter(getActivity(), mActionListener);
+        mRecyclerView.setLayoutManager(new GridLayoutManager(getActivity(), getSpanCount()));
+        mAdapter = new MoviesAdapter(getActivity(), isDualPane, mActionListener);
         mRecyclerView.setAdapter(mAdapter);
         mSortOrder = getSortParam();
         if (savedInstanceState == null) {
@@ -134,10 +159,19 @@ public class MoviesFragment extends Fragment
                     showErrorViews();
                     break;
                 case VIEW_STATE_RESULTS:
+                    int selectedPosition = savedInstanceState.getInt(ARG_SELECTED_ITEM, 0);
                     ArrayList<Movie> items = savedInstanceState.getParcelableArrayList(ARG_ITEMS);
+                    mAdapter.mSelectedPosition = selectedPosition;
                     mAdapter.setItems(items);
-                    mRecyclerView.scrollToPosition(0);
                     showResultViews();
+                    if (isDualPane) {
+                        mRecyclerView.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                mRecyclerView.scrollToPosition(mAdapter.mSelectedPosition);
+                            }
+                        });
+                    }
                     break;
                 case VIEW_STATE_EMPTY:
                     showEmptyViews();
@@ -162,6 +196,7 @@ public class MoviesFragment extends Fragment
         }
         outState.putInt(ARG_VIEW_STATE, state);
         outState.putParcelableArrayList(ARG_ITEMS, mAdapter.getItems());
+        outState.putInt(ARG_SELECTED_ITEM, mAdapter.mSelectedPosition);
         outState.putString(ARG_SORT_ORDER, mSortOrder);
         super.onSaveInstanceState(outState);
     }
@@ -173,11 +208,24 @@ public class MoviesFragment extends Fragment
      */
     public void setSortOrder(String sortOrder) {
         mSortOrder = sortOrder;
+        mAdapter.mSelectedPosition = 0;
         populateData();
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getActivity());
         SharedPreferences.Editor editor = prefs.edit();
         editor.putString(getString(R.string.prefs_sort_order), mSortOrder);
         editor.apply();
+    }
+
+    public void setDualPane(boolean dualPane) {
+        isDualPane = dualPane;
+    }
+
+    public void favoriteListChanged(long movieId) {
+        loadFavorites();
+        if (mSortOrder.equals(getString(R.string.sort_order_favorites))) {
+            // TODO: remove/insert by one item
+            populateData();
+        }
     }
 
     /** Returns favorites list. */
@@ -247,15 +295,28 @@ public class MoviesFragment extends Fragment
         return prefs.getString(getString(R.string.prefs_sort_order), defaultValue);
     }
 
-    /**
-     * Helper method to hide all elements, except progress bar.
-     */
+    /** Calculates grid span count */
+    private int getSpanCount() {
+        int orientation = getResources().getConfiguration().orientation;
+        int sw = getResources().getConfiguration().smallestScreenWidthDp;
+        boolean landscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
+        if (sw < 600) {
+            return (landscape) ? 4 : 2;
+        } else if (sw < 720) {
+            return (landscape) ? 2 : 3;
+        } else {
+            return (landscape) ? 3 : 2;
+        }
+    }
+
+    /** Helper method to hide all elements, except progress bar. */
     private void showLoadingViews() {
         mProgressBar.setVisibility(View.VISIBLE);
         mErrorTextView.setVisibility(View.GONE);
         mRetryButton.setVisibility(View.GONE);
         mRecyclerView.setVisibility(View.GONE);
         mEmptyTextView.setVisibility(View.GONE);
+        mActionListener.onEmptyMovieList();
     }
 
     /** Helper method to hide all elements, except error views. */
@@ -265,6 +326,7 @@ public class MoviesFragment extends Fragment
         mProgressBar.setVisibility(View.GONE);
         mRecyclerView.setVisibility(View.GONE);
         mEmptyTextView.setVisibility(View.GONE);
+        mActionListener.onEmptyMovieList();
     }
 
     /** Helper method to hide all elements, except empty view. */
@@ -274,6 +336,7 @@ public class MoviesFragment extends Fragment
         mProgressBar.setVisibility(View.GONE);
         mErrorTextView.setVisibility(View.GONE);
         mRetryButton.setVisibility(View.GONE);
+        mActionListener.onEmptyMovieList();
     }
 
 
@@ -287,10 +350,14 @@ public class MoviesFragment extends Fragment
     }
 
     @SuppressWarnings("unchecked")
+    /** Stores movie list to db. */
     private void storeMovies(ArrayList<Movie> movieList) {
         new MovieStoreAsyncTask(getActivity()).execute(movieList);
     }
 
+    /**
+     * Loader callbacks
+     */
     @Override
     public Loader<ArrayList<Movie>> onCreateLoader(int id, Bundle args) {
         return new MovieListLoader(getActivity(), loadFavorites());
@@ -318,6 +385,8 @@ public class MoviesFragment extends Fragment
     public interface ListActionListener {
 
         void onMovieSelected(Movie movie, boolean isFavorite);
+
+        void onEmptyMovieList();
     }
 
     /** Movies RecyclerView adapter class. */
@@ -327,21 +396,37 @@ public class MoviesFragment extends Fragment
 
         final private ListActionListener mActionListener;
 
+        final private boolean isDualPane;
+
         private ArrayList<Movie> mItems;
 
         private ArrayList<Long> mFavorites;
 
-        public MoviesAdapter(Context context, ListActionListener listener) {
+        // keep track of selected item
+        private int mSelectedPosition;
+
+        public MoviesAdapter(Context context, boolean dualPane, ListActionListener listener) {
             mContext = context;
+            isDualPane = dualPane;
             mActionListener = listener;
             mItems = new ArrayList<>();
         }
 
+        @SuppressWarnings("deprecation")
         @Override
         public MovieViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
             LayoutInflater inflater = LayoutInflater.from(parent.getContext());
             View v = inflater.inflate(R.layout.movie_item, parent, false);
-            return new MovieViewHolder(v);
+            MovieViewHolder holder = new MovieViewHolder(v);
+            if (isDualPane) {
+                Drawable drawable = ContextCompat.getDrawable(mContext, R.drawable.movie_selector);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
+                    holder.itemView.setBackground(drawable);
+                } else {
+                    holder.itemView.setBackgroundDrawable(drawable);
+                }
+            }
+            return holder;
         }
 
         @Override
@@ -355,16 +440,22 @@ public class MoviesFragment extends Fragment
             holder.mPosterView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
-                    Movie movie = mItems.get(position);
-                    boolean isFavorite = (mFavorites != null && mFavorites.contains(movie.id));
-                    mActionListener.onMovieSelected(movie, isFavorite);
+                    selectItem(position);
                 }
             });
+            if (isDualPane) {
+                holder.itemView.setSelected(mSelectedPosition == position);
+            }
         }
 
         @Override
         public int getItemCount() {
             return mItems.size();
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return mItems.get(position).id;
         }
 
         public void setFavorites(ArrayList<Long> favorites) {
@@ -378,8 +469,22 @@ public class MoviesFragment extends Fragment
         public void setItems(ArrayList<Movie> items) {
             mItems = items;
             notifyDataSetChanged();
+            if (isDualPane) {
+                int position = (mSelectedPosition < mItems.size()) ? mSelectedPosition
+                        : mItems.size() - 1;
+                selectItem(position);
+            }
         }
 
+        private void selectItem(int position) {
+            int prevPosition = mSelectedPosition;
+            mSelectedPosition = position;
+            notifyItemChanged(position);
+            notifyItemChanged(prevPosition);
+            Movie movie = mItems.get(position);
+            boolean isFavorite = (mFavorites != null && mFavorites.contains(movie.id));
+            mActionListener.onMovieSelected(movie, isFavorite);
+        }
     }
 
     /** Movie view holder class. */
@@ -391,6 +496,8 @@ public class MoviesFragment extends Fragment
         public MovieViewHolder(View itemView) {
             super(itemView);
             ButterKnife.inject(this, itemView);
+            itemView.setClickable(true);
         }
     }
+
 }

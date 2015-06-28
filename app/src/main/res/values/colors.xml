@@ -4,7 +4,5 @@
     <color name="primary">#CDDC39</color>
     <color name="accent">#00BCD4</color>
     <color name="text_color">#8A000000</color>
-
     <color name="icon_tint">#999999</color>
-
 </resources>
