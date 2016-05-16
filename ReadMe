@@ -1,1 +1,7 @@
 The API key Has been Removed
+You can find API key
+in 
+~/app/src/main/java/me/abhelly/movies/api/RetrofitAdapter.java
+and the Variable
+API_KEY.
+Please provide API key.
